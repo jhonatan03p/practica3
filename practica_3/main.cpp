@@ -1,7 +1,93 @@
 #include <iostream>
 #include <fstream>
-using namespace std;
+#include <string>
+#include <cstring>
 
+using namespace std;
+string** crearlistausuarios(char* lista, int& filas_out) {
+    int filas = 0;
+    int columnas = 4;
+    string dato = "";
+    int f = 0, c = 0;
+
+    for (int i = 0; lista[i] != '\0'; i++) {
+        if (lista[i] == '\n') {
+            filas++;
+        }
+    }
+    if (lista[0] != '\0' && lista[strlen(lista) - 1] != '\n') filas++;
+
+    string** matriz = new string*[filas];
+    for (int i = 0; i < filas; i++) {
+        matriz[i] = new string[columnas];
+    }
+
+    for (int i = 0; lista[i] != '\0'; i++) {
+        char ch = lista[i];
+
+
+        if (ch == '\r') continue;
+
+        if (ch == ',' || ch == '\n') {
+            matriz[f][c] = dato;
+            dato = "";
+            c++;
+            if (c == columnas || ch == '\n') {
+                f++;
+                c = 0;
+            }
+        } else {
+            dato += ch;
+        }
+    }
+
+    if (!dato.empty() && f < filas && c < columnas) {
+        matriz[f][c] = dato;
+    }
+
+    filas_out = filas;
+    return matriz;
+}
+char bitsachar(char* bits) {
+    char valor = 0;
+    for (int i = 0; i < 8; i++) {
+        valor <<= 1;
+        if (bits[i] == '1')
+            valor |= 1;
+    }
+    return valor;
+}
+char* reconstruirmensaje(char* cadena,int filas,int columnas){
+    char* mensaje=new char[((filas*columnas)/8)+1];
+    char cad[8];
+    int j=0;
+    int n=0;
+    for(int i=0;i<(filas*columnas);i++){
+        cad[j]=cadena[i];
+        j++;
+        if((i+1)%8==0){
+            char letra=bitsachar(cad);
+            mensaje[n]=letra;
+            n++;
+            j=0;
+        }
+
+    }
+    mensaje[n]='\0';
+    return mensaje;
+}
+char* reconstruircadena(int** matriz, int filas, int columnas) {
+    int n = 0;
+    char* cadena = new char[filas * columnas + 1];
+    for (int i = 0; i < filas; i++) {
+        for (int j = 0; j < columnas; j++) {
+            cadena[n] = (matriz[i][j] == 1) ? '1' : '0';
+            n++;
+        }
+    }
+    cadena[n] = '\0';
+    return cadena;
+}
 //------------------------- LECTURA ARCHIVO EN BITS
 char* leerArchivoEnBits(const char* nombreArchivo, int& tamBits) {
     ifstream archivo(nombreArchivo, ios::binary);
@@ -53,7 +139,46 @@ int** matrizordenada(int columnas, int filas, char* lista, int totalBits) {
     return matriz;
 }
 
+int** codificar1(int** lista, int filas, int columnas) {
+    int** new_lista = new int*[filas];
+    for (int i = 0; i < filas; i++) {
+        new_lista[i] = new int[columnas];
+    }
 
+    for (int i = 0; i < filas; i++) {
+        if (i == 0) {
+            for (int j = 0; j < columnas; j++) {
+                new_lista[i][j] = (lista[i][j] == 1) ? 0 : 1;
+            }
+        } else {
+            int cont = 0;
+            for (int j = 0; j < columnas; j++) {
+                if (lista[i - 1][j] == 1) cont++;
+            }
+
+            if (cont > columnas / 2) {
+                for (int j = 0; j < columnas; j++) {
+                    if ((j + 1) % 3 == 0)
+                        new_lista[i][j] = (lista[i][j] == 1) ? 0 : 1;
+                    else
+                        new_lista[i][j] = lista[i][j];
+                }
+            } else if (cont < columnas / 2) {
+                for (int j = 0; j < columnas; j++) {
+                    if (j % 2 == 1)
+                        new_lista[i][j] = (lista[i][j] == 1) ? 0 : 1;
+                    else
+                        new_lista[i][j] = lista[i][j];
+                }
+            } else {
+                for (int j = 0; j < columnas; j++) {
+                    new_lista[i][j] = (lista[i][j] == 1) ? 0 : 1;
+                }
+            }
+        }
+    }
+    return new_lista;
+}
 // ---------------- DECODIFICACION METODO 1
 int** descodificar1(int** lista, int filas, int columnas) {
     int** new_lista = new int*[filas];
@@ -145,13 +270,14 @@ int main() {
     cin >> nombreArchivo;
 
     int tamBits;
-    char* bits = leerArchivoEnBits(nombreArchivo, tamBits);
+    char* bits = leerArchivoEnBits("datos.txt", tamBits);
     if (!bits) return 1;
-
+    int bit=bits[3]-'0';
+    cout<<bit<<endl;
+    int columnas = 4;
+    int filas = tamBits / columnas;
     switch (opcion) {
     case 1: {
-        int columnas = 4;
-        int filas = tamBits / columnas;
         if (tamBits % columnas != 0) filas++;
 
         int** matriz = matrizordenada(columnas, filas, bits, tamBits);
@@ -163,8 +289,15 @@ int main() {
             }
             cout << endl;
         }
-
-        int** decodificada = descodificar1(matriz, filas, columnas);
+        int** codificada=codificar1(matriz,filas,columnas);
+        cout << "\n--- MATRIZ CODIFICADA ---\n";
+        for (int i = 0; i < filas; i++) {
+            for (int j = 0; j < columnas; j++) {
+                cout << codificada[i][j];
+            }
+            cout << endl;
+        }
+        int** decodificada = descodificar1(codificada, filas, columnas);
         cout << "\n MATRIZ DECODIFICADA \n";
         for (int i = 0; i < filas; i++) {
             for (int j = 0; j < columnas; j++) {
@@ -172,13 +305,33 @@ int main() {
             }
             cout << endl;
         }
+        char* cadena=reconstruircadena(decodificada,filas,columnas);
+        // cout<<cadena<<endl;
+        char* mensaje=reconstruirmensaje(cadena,filas,columnas);
+        // cout<<mensaje<<endl;
+        cout<<endl<<endl<<endl;
+        int filasusuarios;
+        string** datos = crearlistausuarios(mensaje, filasusuarios);
+        int fil = 2; // porque hay dos usuarios
+        int col = 4;
+
+        for (int i = 0; i < fil; i++) {
+            for (int j = 0; j < col; j++) {
+                cout << datos[i][j] << " ";
+            }
+            cout << endl;
+        }
+        delete[] cadena;
+        delete[] mensaje;
 
         for (int i = 0; i < filas; i++) {
+            delete[] codificada[i];
             delete[] matriz[i];
             delete[] decodificada[i];
         }
         delete[] matriz;
         delete[] decodificada;
+        delete[] codificada;
         break;
     }
 
@@ -193,6 +346,8 @@ int main() {
         char* decodificado = decodificarMetodo2(codificado, tamBits, n);
         cout << "\nDecodificacion metodo 2:\n" << decodificado << endl;
 
+        char* mensaje=reconstruirmensaje(decodificado,filas,columnas);
+        cout<<"\nMensaje Original: "<<mensaje<<endl;
         delete[] codificado;
         delete[] decodificado;
         break;
