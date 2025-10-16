@@ -36,7 +36,27 @@ char* leerArchivoEnBits(const char* nombreArchivo, int& tamBits) {
     return bits;
 }
 
+char* leerarchivo(const char* archivo, int& tam) {
+    ifstream arch(archivo, ios::binary);
+    if (!arch.is_open()) {
+        cerr << "No se pudo abrir el archivo: " << archivo << endl;
+        tam = 0;
+        return nullptr;
+    }
 
+    // Mover puntero al final para saber el tamaño
+    arch.seekg(0, ios::end);
+    tam = arch.tellg();
+    arch.seekg(0, ios::beg);
+
+    // Reservar memoria dinámica según el tamaño
+    char* buffer = new char[tam + 1];
+    arch.read(buffer, tam);
+    buffer[tam] = '\0'; // aseguramos terminador nulo
+    arch.close();
+
+    return buffer;
+}
 // ----------------------- METODO 1
 int** matrizordenada(int columnas, int filas, char* lista, int totalBits) {
     int n = 0;
@@ -151,6 +171,22 @@ char* codificarMetodo2(char* bits, int tam, int n) {
         } else codificado[i] = bits[i];
     }
     return codificado;
+}
+
+char* textoABits(const char* texto, int& tamBits) {
+    int tamTexto = strlen(texto);
+    tamBits = tamTexto * 8;
+    char* bits = new char[tamBits + 1];
+    bits[tamBits] = '\0';
+
+    int pos = 0;
+    for (int i = 0; i < tamTexto; i++) {
+        unsigned char c = texto[i];
+        for (int j = 7; j >= 0; j--) {
+            bits[pos++] = ((c >> j) & 1) + '0';
+        }
+    }
+    return bits;
 }
 
 

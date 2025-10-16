@@ -1,153 +1,184 @@
 #include <iostream>
-#include <fstream>
-#include <string>
 #include <cstring>
 #include "codificacion.h"
 #include "usuarios.h"
-
 using namespace std;
 
-//----------------------------------------------
+// valida credenciales en la matriz 'datos' y devuelve la cédula ("" si falla)
+string pedirYValidarCred(string** datos, int filas) {
+    string ced, clave;
+    cout << "Cedula: "; cin >> ced;
+    cout << "Clave : "; cin >> clave;
+    for (int i = 0; i < filas; ++i)
+        if (datos[i][1] == ced && datos[i][2] == clave) return ced;
+    cout << "Cedula/clave incorrectos\n";
+    return string("");
+}
+
 int main() {
-    int opcion;
-    cout << "Seleccione una opcion:\n";
-    cout << "1. Codificar/decodificar metodo 1\n";
-    cout << "2. Codificar/decodificar metodo 2\n";
-    cout << "Opcion: ";
-    cin >> opcion;
+    int tam = 0;
+    char* buffer = leerarchivo("sudo.txt", tam);
+    if (!buffer || tam == 0) { cerr << "Error leyendo sudo.txt\n"; return 1; }
 
-    char nombreArchivo[100];
-    cout << "Ingrese el nombre del archivo: ";
-    cin >> nombreArchivo;
+    const int columnas = 3;
+    int filas = (tam + columnas - 1) / columnas;
 
-    int tamBits;
-    char* bits = leerArchivoEnBits("datos.txt", tamBits);
-    if (!bits) return 1;
-    int bit=bits[3]-'0';
-    cout<<bit<<endl;
-    int columnas = 3;
-    int filas = tamBits / columnas;
-    switch (opcion) {
-    case 1: {
-        if (tamBits % columnas != 0) filas++;
+    cout << "Seleccione metodo (1 o 2): ";
+    int aux; cin >> aux;
 
-        int** matriz = matrizordenada(columnas, filas, bits, tamBits);
+    // variables comunes
+    string** datos = nullptr;
+    int filasusuarios = 0;
 
-        cout << "\n--- MATRIZ ORIGINAL ---\n";
-        for (int i = 0; i < filas; i++) {
-            for (int j = 0; j < columnas; j++) {
-                cout << matriz[i][j];
-            }
-            cout << endl;
-        }
-        int** codificada=codificar1(matriz,filas,columnas);
-        cout << "\n--- MATRIZ CODIFICADA ---\n";
-        for (int i = 0; i < filas; i++) {
-            for (int j = 0; j < columnas; j++) {
-                cout << codificada[i][j];
-            }
-            cout << endl;
-        }
-        int** decodificada = descodificar1(codificada, filas, columnas);
-        cout << "\n MATRIZ DECODIFICADA \n";
-        for (int i = 0; i < filas; i++) {
-            for (int j = 0; j < columnas; j++) {
-                cout << decodificada[i][j];
-            }
-            cout << endl;
-        }
-        char* cadena=reconstruircadena(decodificada,filas,columnas);
-        // cout<<cadena<<endl;
-        char* mensaje=reconstruirmensaje(cadena,filas,columnas);
-        // cout<<mensaje<<endl;
-        cout<<endl<<endl<<endl;
-        int filasusuarios;
-        string** datos = crearlistausuarios(mensaje, filasusuarios);
-        int fil = 4; // porque hay 4 usuarios
-        int col = 4;
-
-        for (int i = 0; i < fil; i++) {
-            for (int j = 0; j < col; j++) {
-                cout << datos[i][j] << " ";
-            }
-            cout << endl;
-        }
+    if (aux == 1) {
+        // --- Metodo 1 ---
+        int** matrizBits = matrizordenada(columnas, filas, buffer, tam);          // bits -> matriz
+        int** dec = descodificar1(matrizBits, filas, columnas);                  // descodificar
+        char* cadena = reconstruircadena(dec, filas, columnas /* placeholder */); // (we'll fix next line)
+        // CORRECCIÓN: usar columnas (no columns)
         delete[] cadena;
-        delete[] mensaje;
+        cadena = reconstruircadena(dec, filas, columnas);
+        char* mensaje = reconstruirmensaje(cadena, filas, columnas);
 
-        for (int i = 0; i < filas; i++) {
-            delete[] codificada[i];
-            delete[] matriz[i];
-            delete[] decodificada[i];
+        datos = crearlistausuarios(mensaje, filasusuarios);
+
+        //cout << "\n--- Usuarios cargados ---\n";
+        //for (int i = 0; i < filasusuarios; ++i) {
+        //    for (int j = 0; j < 4; ++j) cout << datos[i][j] << " ";
+        //    cout << "\n";
+        //}
+
+        // LOGIN
+        string ced = pedirYValidarCred(datos, filasusuarios);
+        if (ced != "") {
+            bool esAdmin = verificaradmin(datos, filasusuarios, ced);
+            if (esAdmin) {
+                bool salir = false, cobrar = false;
+                while (!salir) {
+                    int op;
+                    cout << "\n--- MENU ADMIN ---\n1. Crear Usuario\n2. Consultar saldo\n3. Retirar dinero\n4. Salir\nOpcion: ";
+                    cin >> op;
+                    switch (op) {
+                    case 1: datos = agregarUsuario(datos, filasusuarios); cobrar = false; break;
+                    case 2: consultar(datos, filasusuarios, ced); cobrar = true; break;
+                    case 3: datos = retirar(datos, filasusuarios, ced); cobrar = true; break;
+                    case 4: if (cobrar) datos = cobrarmovimiento(datos, filasusuarios, ced); salir = true; break;
+                    default: cout << "Accion invalida\n";
+                    }
+                }
+            } else {
+                bool salir = false;
+                while (!salir) {
+                    int op; bool cobrar_local = false;
+                    cout << "\n--- MENU USUARIO ---\n1. Consultar saldo\n2. Retirar dinero\n3. Cancelar\nOpcion: ";
+                    cin >> op;
+                    switch (op) {
+                    case 1: consultar(datos, filasusuarios, ced); cobrar_local = true; break;
+                    case 2: datos = retirar(datos, filasusuarios, ced); cobrar_local = true; break;
+                    case 3: if (cobrar_local) datos = cobrarmovimiento(datos, filasusuarios, ced); salir = true; break;
+                    default: cout << "Accion invalida\n";
+                    }
+                }
+            }
         }
-        delete[] matriz;
-        delete[] decodificada;
+
+        // despues de sesion: reconstruir texto desde matriz (matrizachar libera 'datos')
+        char* texto = matrizachar(datos, filasusuarios, 4);
+        cout << "\nTexto reconstruido:\n" << texto << endl;
+
+        // convertir texto -> bits y recodificar con metodo 1
+        int tamBitsTexto; char* bitsTexto = textoABits(texto, tamBitsTexto);
+        int filasBits = (tamBitsTexto + columnas - 1) / columnas;
+        int** matrizParaCod = matrizordenada(columnas, filasBits, bitsTexto, tamBitsTexto);
+        int** codificada = codificar1(matrizParaCod, filasBits, columnas);
+        char* recodificada = reconstruircadena(codificada, filasBits, columnas);
+
+        guardarEnArchivo("sudo.txt", recodificada);
+
+        // liberar
+        delete[] texto; delete[] bitsTexto; delete[] recodificada;
+        for (int i = 0; i < filasBits; ++i) delete[] matrizParaCod[i];
+        delete[] matrizParaCod;
+        for (int i = 0; i < filasBits; ++i) delete[] codificada[i];
         delete[] codificada;
 
-        bool acceso = login(datos, fil);
-
-        if (acceso) {
-            cout << "\nBienvenido al sistema.\n";
-        } else {
-            cout << "\nAcceso denegado.\n";
-        }
-
-        // Liberar memoria
-        for (int i = 0; i < fil; i++) delete[] datos[i];
-        delete[] datos;
-
-        break;
+        // liberar decodificación inicial
+        delete[] cadena; delete[] mensaje;
+        for (int i = 0; i < filas; ++i) delete[] matrizBits[i];
+        delete[] matrizBits;
+        for (int i = 0; i < filas; ++i) delete[] dec[i];
+        delete[] dec;
     }
+    else if (aux == 2) {
+        // --- Metodo 2 ---
+        int n = 3;
+        char* decod = decodificarMetodo2(buffer, tam, n);                       // decod bits
+        int** matrizDec = matrizordenada(columnas, filas, decod, tam);
+        char* cadena = reconstruircadena(matrizDec, filas, columnas);
+        char* mensaje = reconstruirmensaje(cadena, filas, columnas);
 
-    case 2: {
-        int n;
-        cout << "Ingrese el tamano del bloque de bits (n): ";
-        cin >> n;
+        datos = crearlistausuarios(mensaje, filasusuarios);
 
-        char* codificado = codificarMetodo2(bits, tamBits, n);
-        cout << "\nCodificacion metodo 2:\n" << codificado << endl;
+        //cout << "\n--- Usuarios cargados ---\n";
+        //for (int i = 0; i < filasusuarios; ++i) {
+        //    for (int j = 0; j < 4; ++j) cout << datos[i][j] << " ";
+        //    cout << "\n";
+        //}
 
-        char* decodificado = decodificarMetodo2(codificado, tamBits, n);
-        cout << "\nDecodificacion metodo 2:\n" << decodificado << endl;
-
-        char* mensaje=reconstruirmensaje(decodificado,filas,columnas);
-        cout<<endl<<endl<<endl;
-        int filasusuarios;
-        string** datos = crearlistausuarios(mensaje, filasusuarios);
-        delete[] mensaje;
-        int fil = 4; // porque hay 4 usuarios
-        int col = 4;
-
-        for (int i = 0; i < fil; i++) {
-            for (int j = 0; j < col; j++) {
-                cout << datos[i][j] << " ";
+        // LOGIN
+        string ced = pedirYValidarCred(datos, filasusuarios);
+        if (ced != "") {
+            bool esAdmin = verificaradmin(datos, filasusuarios, ced);
+            if (esAdmin) {
+                bool salir = false, cobrar = false;
+                while (!salir) {
+                    int op;
+                    cout << "\n--- MENU ADMIN ---\n1. Crear Usuario\n2. Consultar saldo\n3. Retirar dinero\n4. Salir\nOpcion: ";
+                    cin >> op;
+                    switch (op) {
+                    case 1: datos = agregarUsuario(datos, filasusuarios); cobrar = false; break;
+                    case 2: consultar(datos, filasusuarios, ced); cobrar = true; break;
+                    case 3: datos = retirar(datos, filasusuarios, ced); cobrar = true; break;
+                    case 4: if (cobrar) datos = cobrarmovimiento(datos, filasusuarios, ced); salir = true; break;
+                    default: cout << "Accion invalida\n";
+                    }
+                }
+            } else {
+                bool salir = false;
+                while (!salir) {
+                    int op; bool cobrar_local = false;
+                    cout << "\n--- MENU USUARIO ---\n1. Consultar saldo\n2. Retirar dinero\n3. Cancelar\nOpcion: ";
+                    cin >> op;
+                    switch (op) {
+                    case 1: consultar(datos, filasusuarios, ced); cobrar_local = true; break;
+                    case 2: datos = retirar(datos, filasusuarios, ced); cobrar_local = true; break;
+                    case 3: if (cobrar_local) datos = cobrarmovimiento(datos, filasusuarios, ced); salir = true; break;
+                    default: cout << "Accion invalida\n";
+                    }
+                }
             }
-            cout << endl;
         }
 
-        bool acceso = login(datos, fil);
+        // despues de sesion: reconstruir texto y recodificar con metodo 2
+        char* texto = matrizachar(datos, filasusuarios, 4);
 
-        if (acceso) {
-            cout << "\nBienvenido al sistema.\n";
-        } else {
-            cout << "\nAcceso denegado.\n";
-        }
+        int tamBitsTexto; char* bitsTexto = textoABits(texto, tamBitsTexto);
+        char* recodificado = codificarMetodo2(bitsTexto, tamBitsTexto, n);
 
-        // Liberar memoria
-        for (int i = 0; i < fil; i++) delete[] datos[i];
-        delete[] datos;
+        guardarEnArchivo("sudo.txt", recodificado);
 
-        delete[] codificado;
-        delete[] decodificado;
-        break;
+        // liberar
+        delete[] texto; delete[] bitsTexto; delete[] recodificado;
+        delete[] decod; delete[] cadena; delete[] mensaje;
+        for (int i = 0; i < filas; ++i) delete[] matrizDec[i];
+        delete[] matrizDec;
+    }
+    else {
+        cout << "Metodo invalido\n";
     }
 
-    default:
-        cout << "Opcion invalida.\n";
-    }
-
-
-
-    delete[] bits;
+    // liberar lectura original
+    delete[] buffer;
+    cout << "\nFin.\n";
     return 0;
 }
